@@ -17,7 +17,7 @@ namespace RpiSurveillance.Functions
             CancellationToken cancellationToken,
             ILogger log)
         {
-            log.LogInformation($"C# HTTP trigger function processed a request for file name {name}.");
+            log.LogInformation($"C# Blob trigger function processed a request for file name {name}.");
 
             await picStream.CopyToAsync(latestPicture, 4096, cancellationToken);
 
