@@ -1,3 +1,7 @@
-Handy resources:
+# PiCam
 
-* [Node.js app with forever running as a service daemon](http://www.slidequest.com/Taboca/70ang)
+This folder contains the scripts that snaps and uploads a picture to Azure Blob Storage.
+
+## Installing on a Raspberry Pi
+
+Instructions TODO
