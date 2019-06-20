@@ -15,7 +15,7 @@ if [ -z "$SAS_TOKEN" ]; then
 fi
 
 echo "Snapping a picture..."
-raspistill -vf -hf -o $filename
+raspistill -vf -hf -w 1024 -h 768 -o $filename
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 echo "Uploading to Azure as $TIMESTAMP.jpg"
