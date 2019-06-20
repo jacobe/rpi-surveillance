@@ -12,7 +12,7 @@ using SixLabors.ImageSharp.Processing;
 using SixLabors.Primitives;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Linq;
-using Microsoft.WindowsAzure.Storage;
+using SixLabors.ImageSharp.Formats.Jpeg;
 
 namespace RpiSurveillance.Functions
 {
@@ -41,7 +41,7 @@ namespace RpiSurveillance.Functions
         [FunctionName("ProcessSurveillanceImage")]
         public static async Task Run(
             [BlobTrigger("pics/{name}")] CloudBlockBlob picture,
-            [Blob("latest-pic/latest.jpg", FileAccess.Write)] Stream output, 
+            [Blob("latest-pic/latest.jpg", FileAccess.ReadWrite)] CloudBlockBlob output, 
             string name,
             ILogger log)
         {
@@ -52,9 +52,13 @@ namespace RpiSurveillance.Functions
             if (result.Matches >= MATCH_THRESHOLD)
             {
                 var text = $"{picture.Name}\n{result.Description}";
-                await ProcessAndUpload(text, picture, output);
+                using (var outputStream = await output.OpenWriteAsync())
+                {
+                    await ProcessPicture(text, picture, outputStream);
+                    log.LogInformation($"Latest picture uploaded: {name} ({outputStream.Position} bytes)");
+                    await outputStream.CommitAsync();
+                }
             }
-            log.LogInformation($"Latest picture uploaded: {name} ({output.Position} bytes)");
         }
 
         private static async Task<AnalysisResult> AnalyzePicture(CloudBlockBlob picture, ILogger log)
@@ -84,7 +88,7 @@ namespace RpiSurveillance.Functions
             };
         }
 
-        private static async Task ProcessAndUpload(string caption, CloudBlockBlob picture, Stream output)
+        private static async Task ProcessPicture(string caption, CloudBlockBlob picture, Stream outputStream)
         {
             using (var memStream = new MemoryStream())
             {
@@ -104,7 +108,7 @@ namespace RpiSurveillance.Functions
                     .DrawText(caption, Font, new Rgba32(255, 255, 255), new PointF(10, 10));
                 });
 
-                image.SaveAsJpeg(output);
+                image.SaveAsJpeg(outputStream, new JpegEncoder { Quality = 25 });
             }
         }
     }
