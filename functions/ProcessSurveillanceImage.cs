@@ -13,6 +13,7 @@ using SixLabors.Primitives;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Linq;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using System.Collections.Generic;
 
 namespace RpiSurveillance.Functions
 {
@@ -54,7 +55,7 @@ namespace RpiSurveillance.Functions
                 var text = $"{picture.Name}\n{result.Description}";
                 using (var outputStream = await output.OpenWriteAsync())
                 {
-                    await ProcessPicture(text, picture, outputStream);
+                    await ProcessPicture(text, result.Persons.Select(b => b.Rectangle).ToList(), picture, outputStream);
                     log.LogInformation($"Latest picture uploaded: {name} ({outputStream.Position} bytes)");
                     await outputStream.CommitAsync();
                 }
@@ -79,16 +80,18 @@ namespace RpiSurveillance.Functions
             int matches = 0;
             matches += analysis.Description.Tags.Intersect(TagsOfInterest).Count();
             matches += analysis.Faces.Count() * 10;
-            matches += analysis.Objects.Where(o => o.ObjectProperty == "person").Count() * 10;
+            var persons = analysis.Objects.Where(o => o.ObjectProperty == "person").ToList();
+            matches += persons.Count * 10;
 
             return new AnalysisResult
             {
                 Matches = matches,
-                Description = string.IsNullOrEmpty(description) ? Char.ToUpper(description[0]) + description.Substring(1) : string.Empty
+                Description = !string.IsNullOrEmpty(description) ? Char.ToUpper(description[0]) + description.Substring(1) : string.Empty,
+                Persons = persons
             };
         }
 
-        private static async Task ProcessPicture(string caption, CloudBlockBlob picture, Stream outputStream)
+        private static async Task ProcessPicture(string caption, List<BoundingRect> boxes, CloudBlockBlob picture, Stream outputStream)
         {
             using (var memStream = new MemoryStream())
             {
@@ -98,14 +101,27 @@ namespace RpiSurveillance.Functions
                 var image = Image.Load(memStream);
                 image.Mutate(i =>
                 {
+                    foreach (var box in boxes)
+                    {
+                        var points = new[]
+                        {
+                            new PointF(box.X, box.Y),
+                            new PointF(box.X + box.W, box.Y),
+                            new PointF(box.X + box.W, box.Y + box.H),
+                            new PointF(box.X, box.Y + box.H)
+                        };
+                        i.DrawPolygon(new Rgba32(0, 255, 255), 2, points);
+                    }
+
                     i.Resize(new ResizeOptions{
                         Size = new SixLabors.Primitives.Size {
                             Width = WIDTH,
                             Height = HEIGHT
                         },
                         Mode = ResizeMode.Max
-                    })
-                    .DrawText(caption, Font, new Rgba32(255, 255, 255), new PointF(10, 10));
+                    });
+
+                    i.DrawText(caption, Font, new Rgba32(255, 255, 255), new PointF(10, 10));
                 });
 
                 image.SaveAsJpeg(outputStream, new JpegEncoder { Quality = 25 });
@@ -117,5 +133,6 @@ namespace RpiSurveillance.Functions
     {
         public int Matches { get; set; }
         public string Description { get; set; }
+        public List<DetectedObject> Persons { get; set; }
     }
 }
