@@ -4,14 +4,18 @@ using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage.Blob;
+using SixLabors.Fonts;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
+using SixLabors.Primitives;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace RpiSurveillance.Functions
 {
     public static class ProcessSurveillanceImage
     {
         const int WIDTH = 640, HEIGHT = 480;
+        static readonly Font Font = SixLabors.Fonts.SystemFonts.Find("Verdana").CreateFont(14);
 
         [FunctionName("ProcessSurveillanceImage")]
         public static async Task Run(
@@ -21,30 +25,37 @@ namespace RpiSurveillance.Functions
             ILogger log)
         {
             log.LogInformation($"C# Blob trigger function processed a request for file name {name}.");
+            await ProcessAndUpload(picture, output, name, log);
+            log.LogInformation($"Latest picture uploaded: {name} ({output.Position} bytes)");
+        }
 
-            log.LogDebug("Resizing picture");
+        private static async Task ProcessAndUpload(CloudBlockBlob picture, Stream output, string name, ILogger log)
+        {
             using (var memStream = new MemoryStream())
             {
                 await picture.DownloadToStreamAsync(memStream);
                 memStream.Position = 0;
-                Resize(memStream, output);
 
-                log.LogInformation($"Latest picture uploaded: {name} ({output.Position} bytes)");
+                var image = Image.Load(memStream);
+                image.Mutate(i =>
+                {
+                    i.Resize(new ResizeOptions{
+                        Size = new SixLabors.Primitives.Size {
+                            Width = WIDTH,
+                            Height = HEIGHT
+                        },
+                        Mode = ResizeMode.Max
+                    })
+                    .DrawText(name, Font, new Rgba32(255, 255, 255), new PointF(10, 10));
+                });
+
+                image.SaveAsJpeg(output);
             }
         }
 
         private static void Resize(Stream input, Stream output)
         {
-            var image = Image.Load(input);
-            image.Mutate(i =>
-                i.Resize(new ResizeOptions{
-                    Size = new SixLabors.Primitives.Size {
-                        Width = WIDTH,
-                        Height = HEIGHT
-                    },
-                    Mode = ResizeMode.Max
-                }));
-            image.SaveAsJpeg(output);
+            
         }
     }
 }
