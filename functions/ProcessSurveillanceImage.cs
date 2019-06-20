@@ -19,7 +19,7 @@ namespace RpiSurveillance.Functions
     public static class ProcessSurveillanceImage
     {
         const int WIDTH = 640, HEIGHT = 480;
-        const int MATCH_THRESHOLD = 2;
+        const int MATCH_THRESHOLD = 3;
         static readonly Font Font = SixLabors.Fonts.SystemFonts.Find("Verdana").CreateFont(14);
         static readonly string ComputerVisionApiKey = Environment.GetEnvironmentVariable("ComputerVisionApiKey");
         static readonly string StorageSasToken = Environment.GetEnvironmentVariable("StorageSasToken");
