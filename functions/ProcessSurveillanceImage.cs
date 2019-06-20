@@ -29,7 +29,7 @@ namespace RpiSurveillance.Functions
                 memStream.Position = 0;
                 Resize(memStream, output);
 
-                log.LogInformation($"Latest picture uploaded: {name} ({memStream.Position} bytes)");
+                log.LogInformation($"Latest picture uploaded: {name} ({output.Position} bytes)");
             }
         }
 
