@@ -25,11 +25,11 @@ namespace RpiSurveillance.Functions
             ILogger log)
         {
             log.LogInformation($"C# Blob trigger function processed a request for file name {name}.");
-            await ProcessAndUpload(picture, output, name, log);
+            await ProcessAndUpload(picture, output);
             log.LogInformation($"Latest picture uploaded: {name} ({output.Position} bytes)");
         }
 
-        private static async Task ProcessAndUpload(CloudBlockBlob picture, Stream output, string name, ILogger log)
+        private static async Task ProcessAndUpload(CloudBlockBlob picture, Stream output)
         {
             using (var memStream = new MemoryStream())
             {
@@ -46,16 +46,11 @@ namespace RpiSurveillance.Functions
                         },
                         Mode = ResizeMode.Max
                     })
-                    .DrawText(name, Font, new Rgba32(255, 255, 255), new PointF(10, 10));
+                    .DrawText(picture.Name, Font, new Rgba32(255, 255, 255), new PointF(10, 10));
                 });
 
                 image.SaveAsJpeg(output);
             }
-        }
-
-        private static void Resize(Stream input, Stream output)
-        {
-            
         }
     }
 }
