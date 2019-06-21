@@ -14,13 +14,14 @@ using SixLabors.ImageSharp.PixelFormats;
 using System.Linq;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using System.Collections.Generic;
+using System.Text;
 
 namespace RpiSurveillance.Functions
 {
     public static class ProcessSurveillanceImage
     {
         const int WIDTH = 640, HEIGHT = 480;
-        const int MATCH_THRESHOLD = 3;
+        const int SCORE_THRESHOLD = 3;
         static readonly Font Font = SixLabors.Fonts.SystemFonts.Find("Verdana").CreateFont(14);
         static readonly string ComputerVisionApiKey = Environment.GetEnvironmentVariable("ComputerVisionApiKey");
         static readonly string StorageSasToken = Environment.GetEnvironmentVariable("StorageSasToken");
@@ -50,12 +51,12 @@ namespace RpiSurveillance.Functions
             log.LogDebug("Running computer vision");
 
             var result = await AnalyzePicture(picture, log);
-            if (result.Matches >= MATCH_THRESHOLD)
+            if (result.Score >= SCORE_THRESHOLD)
             {
                 var text = $"{picture.Name}\n{result.Description}";
                 using (var outputStream = await output.OpenWriteAsync())
                 {
-                    await ProcessPicture(text, result.Persons.Select(b => b.Rectangle).ToList(), picture, outputStream);
+                    await ProcessPicture(text, result.Objects, picture, outputStream);
                     log.LogInformation($"Latest picture uploaded: {name} ({outputStream.Position} bytes)");
                     await outputStream.CommitAsync();
                 }
@@ -71,27 +72,42 @@ namespace RpiSurveillance.Functions
 
             ImageAnalysis analysis = await computerVision.AnalyzeImageAsync($"{picture.Uri}?{StorageSasToken}", features);
 
-            var description = string.Join(", ", analysis.Description.Captions.Select(c => c.Text));
-            log.LogInformation("Description: {0}", description);
-            log.LogInformation("Tags: {0}", string.Join(' ', analysis.Description.Tags));
-            log.LogInformation("Faces: {0}", string.Join(", ", analysis.Faces.Select(f => f.Age + "yo " + f.Gender)));
-            log.LogInformation("Objects: {0}", string.Join(", ", analysis.Objects.Select(o => o.ObjectProperty)));
+            log.LogInformation("Description: {0}", string.Join(", ", analysis.Description.Captions.Select(c => c.Text)));
+            log.LogInformation("Tags:        {0}", string.Join(' ', analysis.Description.Tags));
+            log.LogInformation("Faces:       {0}", string.Join(", ", analysis.Faces.Select(f => $"{f.Age}yo {f.Gender.ToString().ToLower()}")));
+            log.LogInformation("Objects:     {0}", string.Join(", ", analysis.Objects.Select(o => o.ObjectProperty)));
 
-            int matches = 0;
-            matches += analysis.Description.Tags.Intersect(TagsOfInterest).Count();
-            matches += analysis.Faces.Count() * 10;
-            var persons = analysis.Objects.Where(o => o.ObjectProperty == "person").ToList();
-            matches += persons.Count * 10;
+            var description = new StringBuilder();
+            description.AppendJoin(", ", analysis.Description.Captions.Select(c => c.Text));
 
+            var matchingTags = analysis.Description.Tags.Intersect(TagsOfInterest).ToList();
+            description.Append("\nTags: ");
+            description.AppendJoin(", ", matchingTags);
+
+            var objects = new List<ObjectRect>();
+            foreach (var face in analysis.Faces)
+            {
+                var faceRect = face.FaceRectangle;
+                var title = $"{face.Age}yo {face.Gender.ToString().ToLower()}";
+                objects.Add(new ObjectRect(faceRect.Left, faceRect.Top, faceRect.Width, faceRect.Height, title, new Rgba32(255, 255, 0)));
+            }
+
+            foreach (var person in analysis.Objects.Where(o => o.ObjectProperty == "person"))
+            {
+                var personRect = person.Rectangle;
+                objects.Add(new ObjectRect(personRect.X, personRect.Y, personRect.W, personRect.H, person.ObjectProperty, new Rgba32(0, 255, 255)));
+            }
+
+            int score = matchingTags.Count + objects.Count * 10;
             return new AnalysisResult
             {
-                Matches = matches,
-                Description = !string.IsNullOrEmpty(description) ? Char.ToUpper(description[0]) + description.Substring(1) : string.Empty,
-                Persons = persons
+                Score = score,
+                Description = description.ToString(),
+                Objects = objects
             };
         }
 
-        private static async Task ProcessPicture(string caption, List<BoundingRect> boxes, CloudBlockBlob picture, Stream outputStream)
+        private static async Task ProcessPicture(string caption, List<ObjectRect> objectRects, CloudBlockBlob picture, Stream outputStream)
         {
             using (var memStream = new MemoryStream())
             {
@@ -101,25 +117,18 @@ namespace RpiSurveillance.Functions
                 var image = Image.Load(memStream);
                 image.Mutate(i =>
                 {
-                    foreach (var box in boxes)
+                    foreach (var rect in objectRects)
                     {
                         var points = new[]
                         {
-                            new PointF(box.X, box.Y),
-                            new PointF(box.X + box.W, box.Y),
-                            new PointF(box.X + box.W, box.Y + box.H),
-                            new PointF(box.X, box.Y + box.H)
+                            new PointF(rect.X, rect.Y),
+                            new PointF(rect.X + rect.W, rect.Y),
+                            new PointF(rect.X + rect.W, rect.Y + rect.H),
+                            new PointF(rect.X, rect.Y + rect.H)
                         };
-                        i.DrawPolygon(new Rgba32(0, 255, 255), 2, points);
+                        i.DrawPolygon(rect.Color, 2, points);
+                        i.DrawText(rect.Title, Font, rect.Color, new PointF(rect.X + 10, rect.Y + 10));
                     }
-
-                    i.Resize(new ResizeOptions{
-                        Size = new SixLabors.Primitives.Size {
-                            Width = WIDTH,
-                            Height = HEIGHT
-                        },
-                        Mode = ResizeMode.Max
-                    });
 
                     i.DrawText(caption, Font, new Rgba32(255, 255, 255), new PointF(10, 10));
                 });
@@ -131,8 +140,28 @@ namespace RpiSurveillance.Functions
 
     class AnalysisResult
     {
-        public int Matches { get; set; }
+        public int Score { get; set; }
         public string Description { get; set; }
-        public List<DetectedObject> Persons { get; set; }
+        public List<ObjectRect> Objects { get; set; }
+    }
+
+    class ObjectRect
+    {
+        public ObjectRect(int x, int y, int w, int h, string title, Rgba32 color)
+        {
+            X = x;
+            Y = y;
+            W = w;
+            H = h;
+            Title = title;
+            Color = color;
+        }
+
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int W { get; set; }
+        public int H { get; set; }
+        public string Title { get; set; }
+        public Rgba32 Color { get; set; }
     }
 }
