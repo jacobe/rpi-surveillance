@@ -49,7 +49,7 @@ namespace RpiSurveillance.Functions
         {
             log.LogInformation($"C# Blob trigger function processed a request for file name {name}.");
 
-            if (picture.Properties.Created.Value < DateTimeOffset.Now.AddSeconds(20))
+            if (picture.Properties.Created.Value < DateTimeOffset.UtcNow.AddSeconds(-60))
             {
                 log.LogInformation("Picture is too old - ignoring");
                 return;
