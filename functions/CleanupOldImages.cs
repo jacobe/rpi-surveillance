@@ -16,7 +16,7 @@ namespace RpiSurveillance.Functions
 
         [FunctionName("CleanupOldImages")]
         public static async Task Run(
-            [TimerTrigger("0 * * * *")] TimerInfo timer,
+            [TimerTrigger("0 */10 * * * *")] TimerInfo timer,
             ILogger log,
             CancellationToken cancellationToken)
         {
