@@ -12,6 +12,7 @@ namespace RpiSurveillance.Functions
 {
     public static class CleanupOldImages
     {
+        private static readonly TimeSpan RetentionPeriod = TimeSpan.FromDays(7);
         private static readonly TimeZoneInfo localTimeZone = TimeZoneInfo.FindSystemTimeZoneById(Environment.GetEnvironmentVariable("LocalTimeZone")); // eg. 'Central European Standard Time' on Windows
 
         [FunctionName("CleanupOldImages")]
@@ -25,8 +26,8 @@ namespace RpiSurveillance.Functions
             var account = StorageAccount.NewFromConnectionString(Environment.GetEnvironmentVariable("AzureWebJobsStorage"));
             var client = account.CreateCloudBlobClient();
 
-            var today = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, localTimeZone);
-            var expirationTime = today.AddDays(-7);
+            var expirationTime = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, localTimeZone).Subtract(RetentionPeriod);
+            log.LogInformation($"Looking for pictures taken before {expirationTime}");
 
             var picsContainer = client.GetContainerReference("pics");
             int cleanedUp = 0;
