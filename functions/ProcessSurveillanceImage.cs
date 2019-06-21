@@ -104,7 +104,7 @@ namespace RpiSurveillance.Functions
                 objects.Add(new ObjectRect(personRect.X, personRect.Y, personRect.W, personRect.H, person.ObjectProperty, new Rgba32(0, 255, 255)));
             }
 
-            int score = matchingTags.Count + objects.Count * 10;
+            int score = matchingTags.Count + objects.Count * 2;
             return new AnalysisResult
             {
                 Score = score,
