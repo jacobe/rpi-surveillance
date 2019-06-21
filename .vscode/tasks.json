@@ -1,0 +1,60 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Functions: clean",
+            "command": "dotnet clean",
+            "type": "shell",
+            "options": {
+                "cwd": "functions"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Functions: build",
+            "command": "dotnet build",
+            "type": "shell",
+            "options": {
+                "cwd": "functions"
+            },
+            "dependsOn": "Functions: clean",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Functions: clean release",
+            "command": "dotnet clean --configuration Release",
+            "type": "shell",
+            "options": {
+                "cwd": "functions"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Functions: publish",
+            "command": "dotnet publish --configuration Release",
+            "type": "shell",
+            "options": {
+                "cwd": "functions"
+            },
+            "dependsOn": "Functions: clean release",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "type": "func",
+            "dependsOn": "Functions: build",
+            "options": {
+                "cwd": "${workspaceFolder}/functions/bin/Debug/netcoreapp2.1",
+                "env": {
+                    "DYLD_PRINT_LIBRARIES": "1"
+                }
+            },
+            "command": "host start",
+            "isBackground": true,
+            "problemMatcher": "$func-watch"
+        }
+    ]
+}
