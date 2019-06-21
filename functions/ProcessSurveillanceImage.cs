@@ -20,8 +20,6 @@ namespace RpiSurveillance.Functions
 {
     public static class ProcessSurveillanceImage
     {
-        const int WIDTH = 640, HEIGHT = 480;
-        const int SCORE_THRESHOLD = 3;
         static readonly Font Font = SixLabors.Fonts.SystemFonts.Find("Verdana").CreateFont(14);
         static readonly string ComputerVisionApiKey = Environment.GetEnvironmentVariable("ComputerVisionApiKey");
         static readonly string StorageSasToken = Environment.GetEnvironmentVariable("StorageSasToken");
@@ -56,20 +54,20 @@ namespace RpiSurveillance.Functions
             }
 
             log.LogDebug("Running computer vision");
-            var result = await AnalyzePicture(picture, log);
-            if (result.Score >= SCORE_THRESHOLD)
+            var report = await AnalyzePicture(picture, log);
+            if (ShouldAlert(report))
             {
                 using (var outputStream = await output.OpenWriteAsync())
                 {
-                    var text = $"{picture.Name}\n{result.Description}";
-                    await ProcessPicture(text, result.Objects, picture, outputStream);
+                    var caption = $"{picture.Name}\n{report.Description}";
+                    await ProcessPicture(caption, report.Objects, picture, outputStream);
                     log.LogInformation($"Latest picture uploaded: {name} ({outputStream.Position} bytes)");
                     await outputStream.CommitAsync();
                 }
             }
         }
 
-        private static async Task<AnalysisResult> AnalyzePicture(CloudBlockBlob picture, ILogger log)
+        private static async Task<SurveillanceReport> AnalyzePicture(CloudBlockBlob picture, ILogger log)
         {
             ComputerVisionClient computerVision = new ComputerVisionClient(new ApiKeyServiceClientCredentials(ComputerVisionApiKey))
             {
@@ -104,16 +102,20 @@ namespace RpiSurveillance.Functions
                 objects.Add(new ObjectRect(personRect.X, personRect.Y, personRect.W, personRect.H, person.ObjectProperty, new Rgba32(0, 255, 255)));
             }
 
-            int score = matchingTags.Count + objects.Count * 2;
-            return new AnalysisResult
+            return new SurveillanceReport
             {
-                Score = score,
                 Description = description.ToString(),
+                Tags = matchingTags,
                 Objects = objects
             };
         }
 
-        private static async Task ProcessPicture(string caption, List<ObjectRect> objectRects, CloudBlockBlob picture, Stream outputStream)
+        private static bool ShouldAlert(SurveillanceReport report)
+        {
+            return report.Tags.Count > 0 && report.Objects.Count > 0;
+        }
+
+        private static async Task ProcessPicture(string caption, List<ObjectRect> objects, CloudBlockBlob picture, Stream outputStream)
         {
             using (var memStream = new MemoryStream())
             {
@@ -123,17 +125,17 @@ namespace RpiSurveillance.Functions
                 var image = Image.Load(memStream);
                 image.Mutate(i =>
                 {
-                    foreach (var rect in objectRects)
+                    foreach (var obj in objects)
                     {
                         var points = new[]
                         {
-                            new PointF(rect.X, rect.Y),
-                            new PointF(rect.X + rect.W, rect.Y),
-                            new PointF(rect.X + rect.W, rect.Y + rect.H),
-                            new PointF(rect.X, rect.Y + rect.H)
+                            new PointF(obj.X, obj.Y),
+                            new PointF(obj.X + obj.W, obj.Y),
+                            new PointF(obj.X + obj.W, obj.Y + obj.H),
+                            new PointF(obj.X, obj.Y + obj.H)
                         };
-                        i.DrawPolygon(rect.Color, 2, points);
-                        i.DrawText(rect.Title, Font, rect.Color, new PointF(rect.X + 10, rect.Y + 10));
+                        i.DrawPolygon(obj.Color, 2, points);
+                        i.DrawText(obj.Title, Font, obj.Color, new PointF(obj.X + 10, obj.Y + 10));
                     }
 
                     i.DrawText(caption, Font, new Rgba32(255, 255, 255), new PointF(10, 10));
@@ -144,11 +146,12 @@ namespace RpiSurveillance.Functions
         }
     }
 
-    class AnalysisResult
+    class SurveillanceReport
     {
         public int Score { get; set; }
         public string Description { get; set; }
         public List<ObjectRect> Objects { get; set; }
+        public List<string> Tags { get; internal set; }
     }
 
     class ObjectRect
