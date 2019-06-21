@@ -11,7 +11,7 @@ This folder contains the script that snaps and uploads a picture to Azure Blob S
    * `TZ` - the local timezone, eg. `Europe/Copenhagen` (for giving the images the correct name, which is the date/time).
 3. Use crontab to configure cron to run `cron-run.sh` on regular intervals:
    * Run `crontab -e`
-   * Add the following expressions to snap a picture every 10 seconds, logging all output to `rpi-surveillance.log`:
+   * Add the following cron expressions to snap a picture every 10 seconds, logging all output to `rpi-surveillance.log` (update the home folder if your user is not called "pi"):
 
          * * * * * ( cd /home/pi && ./cron-run.sh >> rpi-surveillance.log 2>&1 )
          * * * * * ( cd /home/pi && ./cron-run.sh 10 >> rpi-surveillance.log 2>&1 )
