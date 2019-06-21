@@ -13,7 +13,7 @@ namespace RpiSurveillance.Functions
     {
         [FunctionName("GetImage")]
         public static async Task<HttpResponseMessage> Run(
-            [HttpTrigger(Route = "image/{id}")] HttpRequest request,
+            [HttpTrigger(Route = "image/{id}.jpg")] HttpRequest request,
             [Blob("pics/{id}.jpg", FileAccess.Read)] Stream picStream,
             string id,
             ILogger log)
