@@ -48,14 +48,20 @@ namespace RpiSurveillance.Functions
             ILogger log)
         {
             log.LogInformation($"C# Blob trigger function processed a request for file name {name}.");
-            log.LogDebug("Running computer vision");
 
+            if (picture.Properties.Created.Value < DateTimeOffset.Now.AddSeconds(20))
+            {
+                log.LogInformation("Picture is too old - ignoring");
+                return;
+            }
+
+            log.LogDebug("Running computer vision");
             var result = await AnalyzePicture(picture, log);
             if (result.Score >= SCORE_THRESHOLD)
             {
-                var text = $"{picture.Name}\n{result.Description}";
                 using (var outputStream = await output.OpenWriteAsync())
                 {
+                    var text = $"{picture.Name}\n{result.Description}";
                     await ProcessPicture(text, result.Objects, picture, outputStream);
                     log.LogInformation($"Latest picture uploaded: {name} ({outputStream.Position} bytes)");
                     await outputStream.CommitAsync();
