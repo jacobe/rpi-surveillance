@@ -53,14 +53,15 @@ namespace RpiSurveillance.Functions
                 return;
             }
 
-            log.LogDebug("Running computer vision");
-            var report = await AnalyzePicture(picture, log);
-            if (ShouldAlert(report))
+            //log.LogDebug("Running computer vision");
+            //var report = await AnalyzePicture(picture, log);
+            //if (ShouldAlert(report))
             {
                 using (var outputStream = await output.OpenWriteAsync())
                 {
-                    var caption = $"{picture.Name}\n{report.Description}";
-                    await ProcessPicture(caption, report.Objects, picture, outputStream);
+                    //var caption = $"{picture.Name}\n{report.Description}";
+                    //await ProcessPicture(caption, report.Objects, picture, outputStream);
+                    await ProcessPicture(picture.Name, new List<ObjectRect>(), picture, outputStream);
                     log.LogInformation($"Latest picture uploaded: {name} ({outputStream.Position} bytes)");
                     await outputStream.CommitAsync();
                 }
